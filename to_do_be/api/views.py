@@ -1,7 +1,7 @@
 from rest_framework import generics, status, views, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.permissions import AllowAny
 import logging
@@ -136,6 +136,23 @@ class LogoutAndBlacklistRefreshTokenView(views.APIView):
             return GlobalApiResponse(
                 message="An error occurred while blacklisting the token.",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                success=False
+            )
+
+
+class MyTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            return GlobalApiResponse(
+                response.data,
+                "Token refreshed successfully",
+                status.HTTP_200_OK
+            )
+        else:
+            return GlobalApiResponse(
+                message=response.data,
+                status_code=response.status_code,
                 success=False
             )
 

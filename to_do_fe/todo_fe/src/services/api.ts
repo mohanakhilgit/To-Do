@@ -17,7 +17,7 @@ const apiClient: AxiosInstance = axios.create({
     },
 });
 
-// Add a request interceptor to include the token in headers
+// Request interceptor to include the token in headers
 apiClient.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const token = localStorage.getItem('accessToken');
@@ -31,47 +31,43 @@ apiClient.interceptors.request.use(
     }
 );
 
-// Add a response interceptor to handle token refresh and errors
+// Response interceptor to handle token refresh and errors
 apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
 
+        // Check for 401 error and ensure we don't retry more than once
         if (error.response?.status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
+            originalRequest._retry = true;
 
-        try {
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (refreshToken) {
-            // Attempt to refresh the token
-            const response = await axios.post(
-                `${getApiBaseUrl()}/refresh/`,
-                { refresh: refreshToken }
-            );
+            try {
+                const refreshToken = localStorage.getItem('refreshToken');
+                if (refreshToken) {
+                    const response = await axios.post(
+                        `${getApiBaseUrl()}/refresh/`,
+                        { refresh: refreshToken }
+                    );
 
-            const newAccessToken = response.data.access;
-            localStorage.setItem('accessToken', newAccessToken);
+                    const newAccessToken = response.data.data.access;
+                    const newRefreshToken = response.data.data.refresh;
+                    
+                    localStorage.setItem('accessToken', newAccessToken);
+                    localStorage.setItem('refreshToken', newRefreshToken);
 
-            // Retry the original request with new token
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-            return apiClient(originalRequest);
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                    
+                    return apiClient(originalRequest);
+                }
+            } catch (refreshError) {
+                // This block runs if the /refresh/ endpoint itself fails (e.g., refresh token is also invalid)
+                console.error("Token refresh failed:", refreshError);
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+                return Promise.reject(refreshError);
             }
-        } catch (refreshError) {
-            // Refresh failed, redirect to login
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-            return Promise.reject(refreshError);
-        }
-        }
-
-        if (error.response?.status === 401) {
-            // Clear tokens and redirect to login
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
         }
 
         return Promise.reject(error);
